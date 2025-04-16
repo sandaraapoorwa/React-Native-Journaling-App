@@ -15,8 +15,8 @@ import {
   ActivityIndicator,
 } from "react-native"
 import { BookOpen, Mail, Lock, Eye, EyeOff } from "lucide-react-native"
+import AsyncStorage from "@react-native-async-storage/async-storage"
 import { validateEmail, validatePassword } from "./utils/validation"
-import { loginUser, saveRememberMe, getRememberMe } from "./utils/storage"
 
 export default function LoginScreen({ navigation }: any) {
   const [email, setEmail] = useState("")
@@ -31,21 +31,27 @@ export default function LoginScreen({ navigation }: any) {
 
   // Check for saved credentials on component mount
   useEffect(() => {
-    const loadSavedCredentials = async () => {
+    const checkSavedCredentials = async () => {
       try {
-        const savedCredentials = await getRememberMe()
+        const savedEmail = await AsyncStorage.getItem("paperpal_email")
+        const savedRememberMe = await AsyncStorage.getItem("paperpal_remember_me")
 
-        if (savedCredentials) {
-          setEmail(savedCredentials.email)
-          setPassword(savedCredentials.password)
-          setRememberMe(savedCredentials.remember)
+        if (savedEmail && savedRememberMe === "true") {
+          setEmail(savedEmail)
+          setRememberMe(true)
+
+          // Optionally load password if remember me was checked
+          const savedPassword = await AsyncStorage.getItem("paperpal_password")
+          if (savedPassword) {
+            setPassword(savedPassword)
+          }
         }
       } catch (error) {
         console.error("Error loading saved credentials:", error)
       }
     }
 
-    loadSavedCredentials()
+    checkSavedCredentials()
   }, [])
 
   const validateForm = () => {
@@ -70,20 +76,40 @@ export default function LoginScreen({ navigation }: any) {
     setLoading(true)
 
     try {
-      // Attempt to login
-      const user = await loginUser(email, password)
+      // Check if user exists in AsyncStorage
+      const usersJSON = await AsyncStorage.getItem("paperpal_users")
+      const users = usersJSON ? JSON.parse(usersJSON) : []
+
+      const user = users.find((u: any) => u.email.toLowerCase() === email.toLowerCase())
 
       if (!user) {
-        Alert.alert("Login Failed", "Invalid email or password. Please try again.")
+        Alert.alert("Login Failed", "No account found with this email. Please register first.")
         setLoading(false)
         return
       }
 
-      // Save remember me preferences
-      await saveRememberMe(email, password, rememberMe)
+      if (user.password !== password) {
+        Alert.alert("Login Failed", "Incorrect password. Please try again.")
+        setLoading(false)
+        return
+      }
+
+      // Save credentials if remember me is checked
+      if (rememberMe) {
+        await AsyncStorage.setItem("paperpal_email", email)
+        await AsyncStorage.setItem("paperpal_password", password)
+        await AsyncStorage.setItem("paperpal_remember_me", "true")
+      } else {
+        // Clear saved credentials if remember me is unchecked
+        await AsyncStorage.removeItem("paperpal_password")
+        await AsyncStorage.removeItem("paperpal_remember_me")
+      }
+
+      // Save current user info
+      await AsyncStorage.setItem("paperpal_current_user", JSON.stringify(user))
 
       // Navigate to dashboard
-      navigation.navigate("Dashboard")
+      navigation.navigate("Details")
     } catch (error) {
       console.error("Login error:", error)
       Alert.alert("Error", "An unexpected error occurred. Please try again.")

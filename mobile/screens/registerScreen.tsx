@@ -85,7 +85,7 @@ export default function RegisterScreen({ navigation }: any) {
       Alert.alert("Registration Successful", "Your account has been created successfully!", [
         {
           text: "OK",
-          onPress: () => navigation.navigate("Dashboard"),
+          onPress: () => navigation.navigate("Details"),
         },
       ])
     } catch (error) {
