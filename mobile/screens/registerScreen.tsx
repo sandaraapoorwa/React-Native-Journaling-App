@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import {
   View,
   Text,
@@ -14,42 +14,32 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native"
-import { BookOpen, Mail, Lock, Eye, EyeOff } from "lucide-react-native"
-import { validateEmail, validatePassword } from "./utils/validation"
-import { loginUser, saveRememberMe, getRememberMe } from "./utils/storage"
+import { BookOpen, Mail, Lock, Eye, EyeOff, User, ArrowLeft } from "lucide-react-native"
+import { validateEmail, validatePassword, validateName } from "./utils/validation"
+import { registerUser, saveCurrentUser } from "./utils/storage"
 
-export default function LoginScreen({ navigation }: any) {
+export default function RegisterScreen({ navigation }: any) {
+  const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
-  const [rememberMe, setRememberMe] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
 
   // Form validation states
+  const [nameError, setNameError] = useState("")
   const [emailError, setEmailError] = useState("")
   const [passwordError, setPasswordError] = useState("")
-
-  // Check for saved credentials on component mount
-  useEffect(() => {
-    const loadSavedCredentials = async () => {
-      try {
-        const savedCredentials = await getRememberMe()
-
-        if (savedCredentials) {
-          setEmail(savedCredentials.email)
-          setPassword(savedCredentials.password)
-          setRememberMe(savedCredentials.remember)
-        }
-      } catch (error) {
-        console.error("Error loading saved credentials:", error)
-      }
-    }
-
-    loadSavedCredentials()
-  }, [])
+  const [confirmPasswordError, setConfirmPasswordError] = useState("")
 
   const validateForm = () => {
     let isValid = true
+
+    // Validate name
+    const nameValidation = validateName(name)
+    setNameError(nameValidation)
+    if (nameValidation) isValid = false
 
     // Validate email
     const emailValidation = validateEmail(email)
@@ -61,50 +51,59 @@ export default function LoginScreen({ navigation }: any) {
     setPasswordError(passwordValidation)
     if (passwordValidation) isValid = false
 
+    // Validate confirm password
+    if (password !== confirmPassword) {
+      setConfirmPasswordError("Passwords don't match")
+      isValid = false
+    }
+
     return isValid
   }
 
-  const handleLogin = async () => {
+  const handleRegister = async () => {
     if (!validateForm()) return
 
     setLoading(true)
 
     try {
-      // Attempt to login
-      const user = await loginUser(email, password)
+      // Register new user
+      const newUser = await registerUser({
+        name,
+        email,
+        password,
+      })
 
-      if (!user) {
-        Alert.alert("Login Failed", "Invalid email or password. Please try again.")
+      if (!newUser) {
+        Alert.alert("Registration Failed", "An account with this email already exists.")
         setLoading(false)
         return
       }
 
-      // Save remember me preferences
-      await saveRememberMe(email, password, rememberMe)
+      // Save as current user
+      await saveCurrentUser(newUser)
 
-      // Navigate to dashboard
-      navigation.navigate("Dashboard")
+      Alert.alert("Registration Successful", "Your account has been created successfully!", [
+        {
+          text: "OK",
+          onPress: () => navigation.navigate("Dashboard"),
+        },
+      ])
     } catch (error) {
-      console.error("Login error:", error)
+      console.error("Registration error:", error)
       Alert.alert("Error", "An unexpected error occurred. Please try again.")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleForgotPassword = () => {
-    // For a simple implementation, we'll just show an alert
-    Alert.alert(
-      "Reset Password",
-      "In a real app, this would send a password reset email. For this demo, please use the registration page to create a new account.",
-      [{ text: "OK" }],
-    )
-  }
-
   return (
     <ImageBackground source={{ uri: "https://via.placeholder.com/600/f5f0e6" }} style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.keyboardAvoid}>
         <ScrollView contentContainerStyle={styles.scrollContainer}>
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <ArrowLeft color="#5E4B3E" size={24} />
+          </TouchableOpacity>
+
           <View style={styles.logoContainer}>
             <View style={styles.logoCircle}>
               <BookOpen color="#5E4B3E" size={40} />
@@ -116,8 +115,28 @@ export default function LoginScreen({ navigation }: any) {
           <View style={styles.formContainer}>
             <View style={styles.decorativeLine} />
 
-            <Text style={styles.welcomeText}>Welcome Back</Text>
+            <Text style={styles.welcomeText}>Create Account</Text>
 
+            {/* Name Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Full Name</Text>
+              <View style={[styles.inputWrapper, nameError ? styles.inputError : null]}>
+                <User color={nameError ? "#B25B4C" : "#8D7B6A"} size={18} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Your full name"
+                  placeholderTextColor="#A89B8C"
+                  value={name}
+                  onChangeText={(text) => {
+                    setName(text)
+                    if (nameError) setNameError("")
+                  }}
+                />
+              </View>
+              {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+            </View>
+
+            {/* Email Input */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Email Address</Text>
               <View style={[styles.inputWrapper, emailError ? styles.inputError : null]}>
@@ -138,19 +157,23 @@ export default function LoginScreen({ navigation }: any) {
               {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
             </View>
 
+            {/* Password Input */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Password</Text>
               <View style={[styles.inputWrapper, passwordError ? styles.inputError : null]}>
                 <Lock color={passwordError ? "#B25B4C" : "#8D7B6A"} size={18} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Your password"
+                  placeholder="Create a password"
                   placeholderTextColor="#A89B8C"
                   secureTextEntry={!showPassword}
                   value={password}
                   onChangeText={(text) => {
                     setPassword(text)
                     if (passwordError) setPasswordError("")
+                    if (confirmPasswordError && text === confirmPassword) {
+                      setConfirmPasswordError("")
+                    }
                   }}
                 />
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
@@ -160,28 +183,40 @@ export default function LoginScreen({ navigation }: any) {
               {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
             </View>
 
-            <View style={styles.optionsRow}>
-              <TouchableOpacity style={styles.checkboxContainer} onPress={() => setRememberMe(!rememberMe)}>
-                <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-                  {rememberMe && <View style={styles.checkboxInner} />}
-                </View>
-                <Text style={styles.checkboxLabel}>Remember me</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity onPress={handleForgotPassword}>
-                <Text style={styles.forgotPassword}>Forgot Password?</Text>
-              </TouchableOpacity>
+            {/* Confirm Password Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Confirm Password</Text>
+              <View style={[styles.inputWrapper, confirmPasswordError ? styles.inputError : null]}>
+                <Lock color={confirmPasswordError ? "#B25B4C" : "#8D7B6A"} size={18} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Confirm your password"
+                  placeholderTextColor="#A89B8C"
+                  secureTextEntry={!showConfirmPassword}
+                  value={confirmPassword}
+                  onChangeText={(text) => {
+                    setConfirmPassword(text)
+                    if (confirmPasswordError && text === password) {
+                      setConfirmPasswordError("")
+                    }
+                  }}
+                />
+                <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.eyeIcon}>
+                  {showConfirmPassword ? <EyeOff color="#8D7B6A" size={18} /> : <Eye color="#8D7B6A" size={18} />}
+                </TouchableOpacity>
+              </View>
+              {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
             </View>
 
             <TouchableOpacity
-              style={[styles.loginButton, loading ? styles.loginButtonDisabled : null]}
-              onPress={handleLogin}
+              style={[styles.registerButton, loading ? styles.registerButtonDisabled : null]}
+              onPress={handleRegister}
               disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator size="small" color="#F5F0E6" />
               ) : (
-                <Text style={styles.loginButtonText}>Sign In</Text>
+                <Text style={styles.registerButtonText}>Create Account</Text>
               )}
             </TouchableOpacity>
 
@@ -190,14 +225,15 @@ export default function LoginScreen({ navigation }: any) {
               <View style={styles.dividerOrnament} />
               <View style={styles.divider} />
             </View>
+              <View style={styles.divider} />
+            </View>
 
-            <View style={styles.signupContainer}>
-              <Text style={styles.signupText}>Don't have an account? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate("Register")}>
-                <Text style={styles.signupLink}>Register</Text>
+            <View style={styles.loginContainer}>
+              <Text style={styles.loginText}>Already have an account? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate("Login")}>
+                <Text style={styles.loginLink}>Sign In</Text>
               </TouchableOpacity>
             </View>
-          </View>
 
           <View style={styles.footerContainer}>
             <Text style={styles.footerText}>PaperPal © 2025</Text>
@@ -205,14 +241,14 @@ export default function LoginScreen({ navigation }: any) {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </ImageBackground>
+  </ImageBackground>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F0E6", // Vintage paper color
+    backgroundColor: "#F5F0E6",
   },
   keyboardAvoid: {
     flex: 1,
@@ -221,15 +257,29 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 24,
   },
+  backButton: {
+    position: "absolute",
+    top: Platform.OS === "ios" ? 50 : 20,
+    left: 20,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(232, 223, 208, 0.8)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#C9B8A8",
+  },
   logoContainer: {
     alignItems: "center",
     marginTop: 40,
-    marginBottom: 30,
+    marginBottom: 20,
   },
   logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     backgroundColor: "#E8DFD0",
     alignItems: "center",
     justifyContent: "center",
@@ -237,16 +287,16 @@ const styles = StyleSheet.create({
     borderColor: "#C9B8A8",
   },
   logoText: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: "700",
     color: "#5E4B3E",
-    marginTop: 16,
+    marginTop: 12,
     fontFamily: Platform.OS === "ios" ? "Baskerville" : "serif",
   },
   tagline: {
     fontSize: 14,
     color: "#8D7B6A",
-    marginTop: 8,
+    marginTop: 4,
     fontStyle: "italic",
     fontFamily: Platform.OS === "ios" ? "Baskerville" : "serif",
   },
@@ -254,7 +304,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F9F6F0",
     borderRadius: 12,
     padding: 24,
-    marginVertical: 20,
+    marginVertical: 10,
     borderWidth: 1,
     borderColor: "#D9CAB9",
     shadowColor: "#000",
@@ -279,7 +329,7 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === "ios" ? "Baskerville" : "serif",
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   inputLabel: {
     fontSize: 14,
@@ -320,61 +370,22 @@ const styles = StyleSheet.create({
   eyeIcon: {
     padding: 8,
   },
-  optionsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  checkboxContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderWidth: 1,
-    borderColor: "#8D7B6A",
-    borderRadius: 4,
-    marginRight: 8,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  checkboxChecked: {
-    backgroundColor: "#8D7B6A",
-  },
-  checkboxInner: {
-    width: 10,
-    height: 10,
-    backgroundColor: "#F5F0E6",
-    borderRadius: 2,
-  },
-  checkboxLabel: {
-    color: "#5E4B3E",
-    fontSize: 14,
-    fontFamily: Platform.OS === "ios" ? "Baskerville" : "serif",
-  },
-  forgotPassword: {
-    color: "#8D7B6A",
-    fontSize: 14,
-    textDecorationLine: "underline",
-    fontFamily: Platform.OS === "ios" ? "Baskerville" : "serif",
-  },
-  loginButton: {
+  registerButton: {
     backgroundColor: "#8D7B6A",
     borderRadius: 8,
     height: 50,
     alignItems: "center",
     justifyContent: "center",
+    marginTop: 10,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: "#7A6A5A",
   },
-  loginButtonDisabled: {
+  registerButtonDisabled: {
     backgroundColor: "#A89B8C",
     borderColor: "#A89B8C",
   },
-  loginButtonText: {
+  registerButtonText: {
     color: "#F5F0E6",
     fontSize: 16,
     fontWeight: "600",
@@ -398,17 +409,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#8D7B6A",
     marginHorizontal: 10,
   },
-  signupContainer: {
+  loginContainer: {
     flexDirection: "row",
     justifyContent: "center",
     marginTop: 10,
   },
-  signupText: {
+  loginText: {
     color: "#5E4B3E",
     fontSize: 14,
     fontFamily: Platform.OS === "ios" ? "Baskerville" : "serif",
   },
-  signupLink: {
+  loginLink: {
     color: "#8D7B6A",
     fontSize: 14,
     fontWeight: "600",
