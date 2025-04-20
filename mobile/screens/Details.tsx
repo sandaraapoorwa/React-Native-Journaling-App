@@ -12,14 +12,16 @@ import {
 } from "react-native";
 import { NavigationProp, RouteProp } from "@react-navigation/native";
 import { Smile, Sun, Cloud, CloudRain, Save, Trash2 } from "lucide-react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Updated RootStackParamList (removed Dashboard)
+// RootStackParamList
 type RootStackParamList = {
   SplashScreen: undefined;
   Login: undefined;
   Register: undefined;
   Details: { entry: DiaryEntry };
   Profile: undefined;
+  Home: undefined;
 };
 
 type DiaryEntry = {
@@ -40,18 +42,16 @@ interface DetailsScreenProps {
 }
 
 const DetailsScreen: React.FC<DetailsScreenProps> = ({ route, navigation }) => {
-  // Check if route.params and entry exist
   const entry = route.params?.entry;
 
-  // If entry is undefined, show an error and redirect to Profile
   if (!entry) {
     Alert.alert("Error", "No diary entry found.", [
       {
         text: "OK",
-        onPress: () => navigation.navigate("Profile"),
+        onPress: () => navigation.navigate("Home"),
       },
     ]);
-    return null; // Render nothing while redirecting
+    return null;
   }
 
   const [isEditing, setIsEditing] = useState(false);
@@ -69,7 +69,7 @@ const DetailsScreen: React.FC<DetailsScreenProps> = ({ route, navigation }) => {
 
   const categoryOptions = ["daily", "books", "travel", "food", "weather"];
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title.trim() || !content.trim()) {
       Alert.alert("Error", "Title and content cannot be empty.");
       return;
@@ -83,31 +83,46 @@ const DetailsScreen: React.FC<DetailsScreenProps> = ({ route, navigation }) => {
       category,
     };
 
-    // Mock save action (in a real app, this would update a database or state management)
-    console.log("Saving entry:", updatedEntry);
-    Alert.alert("Success", "Entry saved successfully!");
-    setIsEditing(false);
-    navigation.navigate("Profile"); // Changed to Profile
+    try {
+      const entriesJSON = await AsyncStorage.getItem("paperpal_entries");
+      let entries: DiaryEntry[] = entriesJSON ? JSON.parse(entriesJSON) : [];
+      const index = entries.findIndex((e) => e.id === entry.id);
+      if (index !== -1) {
+        entries[index] = updatedEntry;
+      } else {
+        entries.push(updatedEntry);
+      }
+      await AsyncStorage.setItem("paperpal_entries", JSON.stringify(entries));
+      Alert.alert("Success", "Entry saved successfully!");
+      setIsEditing(false);
+      navigation.navigate("Home");
+    } catch (error) {
+      console.error("Error saving entry:", error);
+      Alert.alert("Error", "Failed to save entry.");
+    }
   };
 
-  const handleDelete = () => {
-    Alert.alert(
-      "Delete Entry",
-      "Are you sure you want to delete this entry?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            // Mock delete action (in a real app, this would remove from a database or state)
-            console.log("Deleting entry:", entry.id);
+  const handleDelete = async () => {
+    Alert.alert("Delete Entry", "Are you sure you want to delete this entry?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            const entriesJSON = await AsyncStorage.getItem("paperpal_entries");
+            let entries: DiaryEntry[] = entriesJSON ? JSON.parse(entriesJSON) : [];
+            entries = entries.filter((e) => e.id !== entry.id);
+            await AsyncStorage.setItem("paperpal_entries", JSON.stringify(entries));
             Alert.alert("Success", "Entry deleted successfully!");
-            navigation.navigate("Profile"); // Changed to Profile
-          },
+            navigation.navigate("Home");
+          } catch (error) {
+            console.error("Error deleting entry:", error);
+            Alert.alert("Error", "Failed to delete entry.");
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const getMoodIcon = (mood: string) => {
@@ -132,7 +147,6 @@ const DetailsScreen: React.FC<DetailsScreenProps> = ({ route, navigation }) => {
     >
       <View style={styles.overlay} />
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.dateText}>{entry.date}</Text>
           <View style={styles.moodContainer}>
@@ -154,7 +168,6 @@ const DetailsScreen: React.FC<DetailsScreenProps> = ({ route, navigation }) => {
           </View>
         </View>
 
-        {/* Title */}
         {isEditing ? (
           <TextInput
             style={styles.titleInput}
@@ -167,7 +180,6 @@ const DetailsScreen: React.FC<DetailsScreenProps> = ({ route, navigation }) => {
           <Text style={styles.titleText}>{title}</Text>
         )}
 
-        {/* Category */}
         <View style={styles.categoryContainer}>
           {isEditing ? (
             <View style={styles.categoryPicker}>
@@ -197,7 +209,6 @@ const DetailsScreen: React.FC<DetailsScreenProps> = ({ route, navigation }) => {
           )}
         </View>
 
-        {/* Content */}
         {isEditing ? (
           <TextInput
             style={styles.contentInput}
@@ -212,7 +223,6 @@ const DetailsScreen: React.FC<DetailsScreenProps> = ({ route, navigation }) => {
           <Text style={styles.contentText}>{content}</Text>
         )}
 
-        {/* Action Buttons */}
         <View style={styles.actionButtons}>
           <TouchableOpacity
             style={styles.actionButton}
@@ -229,7 +239,6 @@ const DetailsScreen: React.FC<DetailsScreenProps> = ({ route, navigation }) => {
           )}
         </View>
 
-        {/* Bottom Padding */}
         <View style={{ height: 40 }} />
       </ScrollView>
     </ImageBackground>

@@ -1,6 +1,4 @@
-"use client"
-
-import { useState } from "react"
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,110 +10,123 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
-} from "react-native"
-import { ArrowLeft, User, Mail, Lock, Eye, EyeOff, Save, LogOut } from "lucide-react-native"
-import { useAuth } from "./context/auth-context"
-import { updateUserProfile } from "./utils/storage"
-import { validateName, validatePassword } from "./utils/validation"
+  FlatList,
+} from "react-native";
+import { ArrowLeft, User, Mail, Lock, Eye, EyeOff, Save, LogOut } from "lucide-react-native";
+import { NavigationProp } from "@react-navigation/native";
+import { useAuth } from "../screens/context/auth-context";
+import { updateUserProfile } from "../screens/utils/storage";
+import { validateName, validatePassword } from "../screens/utils/validation";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export default function ProfileScreen({ navigation }: any) {
-  const { user, logout } = useAuth()
+// RootStackParamList
+type RootStackParamList = {
+  SplashScreen: undefined;
+  Login: undefined;
+  Register: undefined;
+  Details: { entry: DiaryEntry };
+  Profile: undefined;
+  Home: undefined;
+};
 
-  const [name, setName] = useState(user?.name || "")
-  const [currentPassword, setCurrentPassword] = useState("")
-  const [newPassword, setNewPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
-  const [showNewPassword, setShowNewPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [loading, setLoading] = useState(false)
+type DiaryEntry = {
+  id: number;
+  date: string;
+  title: string;
+  content: string;
+  mood: string;
+  category: string;
+};
 
-  // Form validation states
-  const [nameError, setNameError] = useState("")
-  const [currentPasswordError, setCurrentPasswordError] = useState("")
-  const [newPasswordError, setNewPasswordError] = useState("")
-  const [confirmPasswordError, setConfirmPasswordError] = useState("")
+type ProfileScreenProps = {
+  navigation: NavigationProp<RootStackParamList>;
+};
+
+export default function ProfileScreen({ navigation }: ProfileScreenProps) {
+  const { user, logout } = useAuth();
+  const [name, setName] = useState(user?.name || "");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [entries, setEntries] = useState<DiaryEntry[]>([]);
+
+  const [nameError, setNameError] = useState("");
+  const [currentPasswordError, setCurrentPasswordError] = useState("");
+  const [newPasswordError, setNewPasswordError] = useState("");
+  const [confirmPasswordError, setConfirmPasswordError] = useState("");
+
+  useEffect(() => {
+    const loadEntries = async () => {
+      try {
+        const entriesJSON = await AsyncStorage.getItem("paperpal_entries");
+        const loadedEntries: DiaryEntry[] = entriesJSON ? JSON.parse(entriesJSON) : [];
+        setEntries(loadedEntries);
+      } catch (error) {
+        console.error("Error loading entries:", error);
+      }
+    };
+    loadEntries();
+  }, []);
 
   const validateForm = () => {
-    let isValid = true
-
-    // Validate name
+    let isValid = true;
     if (name !== user?.name) {
-      const nameValidation = validateName(name)
-      setNameError(nameValidation)
-      if (nameValidation) isValid = false
+      const nameValidation = validateName(name);
+      setNameError(nameValidation);
+      if (nameValidation) isValid = false;
     }
-
-    // Only validate password fields if user is trying to change password
     if (currentPassword || newPassword || confirmPassword) {
-      // Validate current password
       if (!currentPassword) {
-        setCurrentPasswordError("Current password is required")
-        isValid = false
+        setCurrentPasswordError("Current password is required");
+        isValid = false;
       } else if (currentPassword !== user?.password) {
-        setCurrentPasswordError("Current password is incorrect")
-        isValid = false
+        setCurrentPasswordError("Current password is incorrect");
+        isValid = false;
       }
-
-      // Validate new password
       if (newPassword) {
-        const passwordValidation = validatePassword(newPassword)
-        setNewPasswordError(passwordValidation)
-        if (passwordValidation) isValid = false
+        const passwordValidation = validatePassword(newPassword);
+        setNewPasswordError(passwordValidation);
+        if (passwordValidation) isValid = false;
       }
-
-      // Validate confirm password
       if (newPassword !== confirmPassword) {
-        setConfirmPasswordError("Passwords don't match")
-        isValid = false
+        setConfirmPasswordError("Passwords don't match");
+        isValid = false;
       }
     }
-
-    return isValid
-  }
+    return isValid;
+  };
 
   const handleUpdateProfile = async () => {
-    if (!validateForm() || !user) return
-
-    setLoading(true)
-
+    if (!validateForm() || !user) return;
+    setLoading(true);
     try {
-      const updates: { name?: string; password?: string } = {}
-
-      // Only update what has changed
-      if (name !== user.name) {
-        updates.name = name
-      }
-
-      if (newPassword) {
-        updates.password = newPassword
-      }
-
-      // Only make the API call if there are updates
+      const updates: { name?: string; password?: string } = {};
+      if (name !== user.name) updates.name = name;
+      if (newPassword) updates.password = newPassword;
       if (Object.keys(updates).length > 0) {
-        const updatedUser = await updateUserProfile(user.id, updates)
-
+        const updatedUser = await updateUserProfile(user.id, updates);
         if (!updatedUser) {
-          Alert.alert("Update Failed", "Failed to update profile. Please try again.")
-          return
+          Alert.alert("Update Failed", "Failed to update profile.");
+          return;
         }
-
-        Alert.alert("Success", "Your profile has been updated successfully.")
-
-        // Reset password fields
-        setCurrentPassword("")
-        setNewPassword("")
-        setConfirmPassword("")
+        Alert.alert("Success", "Your profile has been updated successfully.");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
       } else {
-        Alert.alert("No Changes", "No changes were made to your profile.")
+        Alert.alert("No Changes", "No changes were made to your profile.");
       }
     } catch (error) {
-      console.error("Profile update error:", error)
-      Alert.alert("Error", "An unexpected error occurred. Please try again.")
+      console.error("Profile update error:", error);
+      Alert.alert("Error", "An unexpected error occurred.");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleLogout = async () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
@@ -124,16 +135,31 @@ export default function ProfileScreen({ navigation }: any) {
         text: "Logout",
         style: "destructive",
         onPress: async () => {
-          await logout()
+          await logout();
+          navigation.navigate("Login");
         },
       },
-    ])
-  }
+    ]);
+  };
+
+  const renderEntry = ({ item }: { item: DiaryEntry }) => (
+    <TouchableOpacity
+      style={styles.entryCard}
+      onPress={() => navigation.navigate("Details", { entry: item })}
+    >
+      <Text style={styles.entryTitle}>{item.title}</Text>
+      <Text style={styles.entryDate}>{item.date}</Text>
+      <Text style={styles.entryCategory}>{item.category}</Text>
+    </TouchableOpacity>
+  );
 
   return (
-    <ImageBackground source={{ uri: "https://via.placeholder.com/600/f5f0e6" }} style={styles.container}>
+    <ImageBackground
+      source={{ uri: "https://via.placeholder.com/600/f5f0e6" }}
+      style={styles.container}
+    >
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate("Home")}>
           <ArrowLeft color="#5E4B3E" size={24} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
@@ -154,9 +180,18 @@ export default function ProfileScreen({ navigation }: any) {
 
           <View style={styles.formContainer}>
             <View style={styles.decorativeLine} />
+            <Text style={styles.sectionTitle}>Your Diary Entries</Text>
+            <FlatList
+              data={entries}
+              renderItem={renderEntry}
+              keyExtractor={(item) => item.id.toString()}
+              ListEmptyComponent={<Text style={styles.emptyText}>No entries yet.</Text>}
+              contentContainerStyle={styles.listContent}
+            />
+
+            <View style={styles.decorativeLine} />
             <Text style={styles.sectionTitle}>Personal Information</Text>
 
-            {/* Name Input */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Full Name</Text>
               <View style={[styles.inputWrapper, nameError ? styles.inputError : null]}>
@@ -167,20 +202,23 @@ export default function ProfileScreen({ navigation }: any) {
                   placeholderTextColor="#A89B8C"
                   value={name}
                   onChangeText={(text) => {
-                    setName(text)
-                    if (nameError) setNameError("")
+                    setName(text);
+                    if (nameError) setNameError("");
                   }}
                 />
               </View>
               {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
             </View>
 
-            {/* Email Input (disabled) */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Email Address</Text>
               <View style={[styles.inputWrapper, styles.inputDisabled]}>
                 <Mail color="#8D7B6A" size={18} style={styles.inputIcon} />
-                <TextInput style={[styles.input, styles.inputTextDisabled]} value={user?.email} editable={false} />
+                <TextInput
+                  style={[styles.input, styles.inputTextDisabled]}
+                  value={user?.email}
+                  editable={false}
+                />
               </View>
               <Text style={styles.helperText}>Email cannot be changed</Text>
             </View>
@@ -188,11 +226,14 @@ export default function ProfileScreen({ navigation }: any) {
             <View style={styles.decorativeLine} />
             <Text style={styles.sectionTitle}>Change Password</Text>
 
-            {/* Current Password Input */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Current Password</Text>
               <View style={[styles.inputWrapper, currentPasswordError ? styles.inputError : null]}>
-                <Lock color={currentPasswordError ? "#B25B4C" : "#8D7B6A"} size={18} style={styles.inputIcon} />
+                <Lock
+                  color={currentPasswordError ? "#B25B4C" : "#8D7B6A"}
+                  size={18}
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={styles.input}
                   placeholder="Enter current password"
@@ -200,22 +241,34 @@ export default function ProfileScreen({ navigation }: any) {
                   secureTextEntry={!showCurrentPassword}
                   value={currentPassword}
                   onChangeText={(text) => {
-                    setCurrentPassword(text)
-                    if (currentPasswordError) setCurrentPasswordError("")
+                    setCurrentPassword(text);
+                    if (currentPasswordError) setCurrentPasswordError("");
                   }}
                 />
-                <TouchableOpacity onPress={() => setShowCurrentPassword(!showCurrentPassword)} style={styles.eyeIcon}>
-                  {showCurrentPassword ? <EyeOff color="#8D7B6A" size={18} /> : <Eye color="#8D7B6A" size={18} />}
+                <TouchableOpacity
+                  onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                  style={styles.eyeIcon}
+                >
+                  {showCurrentPassword ? (
+                    <EyeOff color="#8D7B6A" size={18} />
+                  ) : (
+                    <Eye color="#8D7B6A" size={18} />
+                  )}
                 </TouchableOpacity>
               </View>
-              {currentPasswordError ? <Text style={styles.errorText}>{currentPasswordError}</Text> : null}
+              {currentPasswordError ? (
+                <Text style={styles.errorText}>{currentPasswordError}</Text>
+              ) : null}
             </View>
 
-            {/* New Password Input */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>New Password</Text>
               <View style={[styles.inputWrapper, newPasswordError ? styles.inputError : null]}>
-                <Lock color={newPasswordError ? "#B25B4C" : "#8D7B6A"} size={18} style={styles.inputIcon} />
+                <Lock
+                  color={newPasswordError ? "#B25B4C" : "#8D7B6A"}
+                  size={18}
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={styles.input}
                   placeholder="Enter new password"
@@ -223,25 +276,35 @@ export default function ProfileScreen({ navigation }: any) {
                   secureTextEntry={!showNewPassword}
                   value={newPassword}
                   onChangeText={(text) => {
-                    setNewPassword(text)
-                    if (newPasswordError) setNewPasswordError("")
+                    setNewPassword(text);
+                    if (newPasswordError) setNewPasswordError("");
                     if (confirmPasswordError && text === confirmPassword) {
-                      setConfirmPasswordError("")
+                      setConfirmPasswordError("");
                     }
                   }}
                 />
-                <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)} style={styles.eyeIcon}>
-                  {showNewPassword ? <EyeOff color="#8D7B6A" size={18} /> : <Eye color="#8D7B6A" size={18} />}
+                <TouchableOpacity
+                  onPress={() => setShowNewPassword(!showNewPassword)}
+                  style={styles.eyeIcon}
+                >
+                  {showNewPassword ? (
+                    <EyeOff color="#8D7B6A" size={18} />
+                  ) : (
+                    <Eye color="#8D7B6A" size={18} />
+                  )}
                 </TouchableOpacity>
               </View>
               {newPasswordError ? <Text style={styles.errorText}>{newPasswordError}</Text> : null}
             </View>
 
-            {/* Confirm Password Input */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Confirm New Password</Text>
               <View style={[styles.inputWrapper, confirmPasswordError ? styles.inputError : null]}>
-                <Lock color={confirmPasswordError ? "#B25B4C" : "#8D7B6A"} size={18} style={styles.inputIcon} />
+                <Lock
+                  color={confirmPasswordError ? "#B25B4C" : "#8D7B6A"}
+                  size={18}
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={styles.input}
                   placeholder="Confirm new password"
@@ -249,17 +312,26 @@ export default function ProfileScreen({ navigation }: any) {
                   secureTextEntry={!showConfirmPassword}
                   value={confirmPassword}
                   onChangeText={(text) => {
-                    setConfirmPassword(text)
+                    setConfirmPassword(text);
                     if (confirmPasswordError && text === newPassword) {
-                      setConfirmPasswordError("")
+                      setConfirmPasswordError("");
                     }
                   }}
                 />
-                <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.eyeIcon}>
-                  {showConfirmPassword ? <EyeOff color="#8D7B6A" size={18} /> : <Eye color="#8D7B6A" size={18} />}
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={styles.eyeIcon}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff color="#8D7B6A" size={18} />
+                  ) : (
+                    <Eye color="#8D7B6A" size={18} />
+                  )}
                 </TouchableOpacity>
               </View>
-              {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
+              {confirmPasswordError ? (
+                <Text style={styles.errorText}>{confirmPasswordError}</Text>
+              ) : null}
             </View>
 
             <TouchableOpacity
@@ -280,7 +352,7 @@ export default function ProfileScreen({ navigation }: any) {
         </View>
       </ScrollView>
     </ImageBackground>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
@@ -465,4 +537,40 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontFamily: Platform.OS === "ios" ? "Baskerville" : "serif",
   },
-})
+  entryCard: {
+    backgroundColor: "#F9F6F0",
+    padding: 16,
+    marginVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D9CAB9",
+  },
+  entryTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#5E4B3E",
+    fontFamily: Platform.OS === "ios" ? "Baskerville" : "serif",
+  },
+  entryDate: {
+    fontSize: 14,
+    color: "#8D7B6A",
+    marginTop: 4,
+    fontFamily: Platform.OS === "ios" ? "Baskerville" : "serif",
+  },
+  entryCategory: {
+    fontSize: 14,
+    color: "#8D7B6A",
+    marginTop: 4,
+    fontFamily: Platform.OS === "ios" ? "Baskerville" : "serif",
+  },
+  emptyText: {
+    fontSize: 16,
+    color: "#8D7B6A",
+    textAlign: "center",
+    marginVertical: 20,
+    fontFamily: Platform.OS === "ios" ? "Baskerville" : "serif",
+  },
+  listContent: {
+    paddingBottom: 20,
+  },
+});
