@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Platform } from "react-native";
+import { Platform, View } from "react-native";
 
 // Screens
 import DetailsScreen from "./screens/Details";
@@ -11,7 +11,26 @@ import RegisterScreen from "./screens/registerScreen";
 import SplashScreen from "./screens/SplashScreen";
 import ProfileScreen from "./screens/profilePage";
 
-const Stack = createNativeStackNavigator();
+// Define RootStackParamList (removed Dashboard)
+type RootStackParamList = {
+  SplashScreen: undefined;
+  Login: undefined;
+  Register: undefined;
+  Details: { entry: DiaryEntry };
+  Profile: undefined;
+};
+
+// Define DiaryEntry type
+type DiaryEntry = {
+  id: number;
+  date: string;
+  title: string;
+  content: string;
+  mood: string;
+  category: string;
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const AppNavigator = () => {
   const [initialRoute, setInitialRoute] = useState<string | null>(null);
@@ -31,15 +50,31 @@ const AppNavigator = () => {
   }, []);
 
   if (!initialRoute) {
-    return <SplashScreen />; // Used as a loading state, no navigation prop
+    return (
+      <View style={{ flex: 1, backgroundColor: "#F5F0E6" }}>
+        <SplashScreen />
+      </View>
+    ); // Wrap SplashScreen in a View to avoid navigation prop issues
   }
 
   return (
     <NavigationContainer>
       <Stack.Navigator initialRouteName={initialRoute}>
-        <Stack.Screen name="SplashScreen" component={SplashScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Register" component={RegisterScreen} options={{ headerShown: false }} />
+        <Stack.Screen
+          name="SplashScreen"
+          component={SplashScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Login"
+          component={LoginScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Register"
+          component={RegisterScreen}
+          options={{ headerShown: false }}
+        />
         <Stack.Screen
           name="Details"
           component={DetailsScreen}
@@ -52,7 +87,11 @@ const AppNavigator = () => {
             },
           }}
         />
-        <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
+        <Stack.Screen
+          name="Profile"
+          component={ProfileScreen}
+          options={{ headerShown: false }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
